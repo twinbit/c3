@@ -26,7 +26,7 @@ char fbLikes[4]; // string for incoming fb like
 char server[] = "192.168.2.199"; 
 unsigned long lastConnectionTime = 0;          // last time you connected to the server, in milliseconds
 boolean lastConnected = false;                 // state of the connection last time through the main loop
-const unsigned long postingInterval = 5000;  // delay between updates, in milliseconds
+const unsigned long postingInterval = 500066;  // delay between updates, in milliseconds
 
 
 // select the pins used on the LCD panel
@@ -47,7 +47,7 @@ void setup()
   lcd.print("Welcome to....");
   delay(2000);
   lcd.setCursor(0,1);
-  lcd.print("Twinbit @ BOARD");
+  lcd.print("Twinbit @ Board");
   delay(2000);
   if (Ethernet.localIP()) {
     lcd.clear();
