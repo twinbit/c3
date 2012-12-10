@@ -1,54 +1,146 @@
 //Sample using LiquidCrystal library
 #include <LiquidCrystal.h>
- 
-/*******************************************************
- 
-This program will test the LCD panel and the buttons
-Mark Bramwell, July 2010
- 
-********************************************************/
- 
+#include <SPI.h>
+#include <Ethernet.h>
+#include <string.h>
+
+// Enter a MAC address and IP address for your controller below.
+// The IP address will be dependent on your local network.
+// gateway and subnet are optional:
+byte mac[] = { 
+  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+IPAddress ip(192,168, 2, 177);
+IPAddress gateway(192, 168, 2, 1);
+IPAddress subnet(255, 255, 0, 0);
+
+// create client
+EthernetClient client;
+
+// received string
+int stringPos = 0;
+// is reading check
+boolean startRead = false; 
+char fbLikes[4]; // string for incoming fb like
+
+// connect to local server to fetch the data
+char server[] = "192.168.2.199"; 
+unsigned long lastConnectionTime = 0;          // last time you connected to the server, in milliseconds
+boolean lastConnected = false;                 // state of the connection last time through the main loop
+const unsigned long postingInterval = 5000;  // delay between updates, in milliseconds
+
+
 // select the pins used on the LCD panel
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
- 
-// define some values used by the panel and buttons
-int lcd_key     = 0;
-int adc_key_in  = 0;
-#define btnRIGHT  0
-#define btnUP     1
-#define btnDOWN   2
-#define btnLEFT   3
-#define btnSELECT 4
-#define btnNONE   5
- 
-// read the buttons
-int read_LCD_buttons()
-{
- adc_key_in = analogRead(0);      // read the value from the sensor 
- // my buttons when read are centered at these valies: 0, 144, 329, 504, 741
- // we add approx 50 to those values and check to see if we are close
- if (adc_key_in > 1000) return btnNONE; // We make this the 1st option for speed reasons since it will be the most likely result
- if (adc_key_in < 50)   return btnRIGHT;  
- if (adc_key_in < 195)  return btnUP; 
- if (adc_key_in < 380)  return btnDOWN; 
- if (adc_key_in < 555)  return btnLEFT; 
- if (adc_key_in < 790)  return btnSELECT;   
- return btnNONE;  // when all others fail, return this...
-}
- 
+
 void setup()
 {
- lcd.begin(16, 2);              // start the library
- lcd.clear();
- lcd.setCursor(0,0);
- lcd.print("Twinbit C3"); // print a simple message
- lcd.setCursor(0, 1);
- lcd.print("Likes:");
+  // initialize the ethernet device
+  Ethernet.begin(mac, ip, gateway, subnet);
+  Serial.begin(9600);
+
+  // init display
+  lcd.begin(16, 2);              // start the library
+
+  // startup application
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Welcome to....");
+  delay(2000);
+  lcd.setCursor(0,1);
+  lcd.print("Twinbit @ BOARD");
+  delay(2000);
+  if (Ethernet.localIP()) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Ethernet:");
+    lcd.setCursor(0, 1);
+    lcd.print(Ethernet.localIP());
+    delay(2000);
+  }
+  // starting screen
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Twinbit - C3");
+  lcd.setCursor(0, 1);
+  lcd.print("Loading.......");
+  httpRequest();
+  delay(100);
 }
-  
-void loop()
-{
-  // print the number of seconds since reset:
-  lcd.setCursor(13, 13);
-  lcd.print(millis()/1000);
+
+
+
+// this method makes a HTTP connection to the server:
+void httpRequest() {
+  // if there's a successful connection:
+  if (client.connect(server, 3000)) {
+    Serial.println("connecting...");
+    // send the HTTP PUT request:
+    client.println("GET /api/likes HTTP/1.1");
+    client.println("Host: www.arduino.cc");
+    client.println("User-Agent: arduino-ethernet");
+    client.println("Connection: close");
+    client.println();
+
+    // note the time that the connection was made:
+    lastConnectionTime = millis();
+  } 
+  else {
+    // if you couldn't make a connection:
+    Serial.println("connection failed");
+    Serial.println("disconnecting.");
+    client.stop();
+  }
 }
+
+
+void loop() {
+  // if there's incoming data from the net connection.
+  // send it out the serial port.  This is for debugging
+  // purposes only:  
+  if (client.available()) {
+    char c = client.read();
+    if (c == '<') { 
+       startRead = true;
+     }
+     else if (startRead) {
+       if (c != '>') {
+         //Serial.print(c);
+         fbLikes[stringPos] = c;
+         stringPos++;
+       }
+       else {
+         // got what we need here! We can disconnect now
+         stringPos = 0;
+         startRead = false;
+         lcd.clear();
+         lcd.setCursor(0, 0);
+         lcd.print("Twinbit - C3");
+         lcd.setCursor(0, 1);
+         lcd.print("Likes: ");
+         lcd.setCursor(7, 1);
+         lcd.print(fbLikes);
+         client.stop();
+         client.flush();
+       }
+     }
+   }
+
+  // if there's no net connection, but there was one last time
+  // through the loop, then stop the client:
+  if (!client.connected() && lastConnected) {
+    Serial.println();
+    Serial.println("disconnecting.");
+    client.stop();
+  }
+
+  // if you're not connected, and ten seconds have passed since
+  // your last connection, then connect again and send data:
+  if(!client.connected() && (millis() - lastConnectionTime > postingInterval)) {
+    httpRequest();
+  }
+  // store the state of the connection for next time through
+  // the loop:
+  lastConnected = client.connected();
+}
+
+

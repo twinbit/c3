@@ -7,6 +7,7 @@ var express = require('express')
   , controllers = require("./controllers")
   , user = require('./controllers/user')
   , http = require('http')
+  , graph     = require('fbgraph')
   , path = require('path');
 
 var app = express();
@@ -32,6 +33,7 @@ app.configure('development', function(){
 });
 
 app.get('/', controllers.mainController().indexAction);
+app.get('/api/likes', controllers.mainController().fbLikes);
 //app.get('/users', user.list);
 
 http.createServer(app).listen(app.get('port'), function(){
